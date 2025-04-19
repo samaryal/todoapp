@@ -1,13 +1,18 @@
+import 'source-map-support/register';
+
+import { verify, decode } from 'jsonwebtoken';
+import { createLogger } from '../../utils/logger.js';
 import Axios from 'axios';
-import jwt from 'jsonwebtoken'; 
-import { createLogger } from '../../utils/logger.mjs';
 
 const logger = createLogger('auth');
+
 const jwksUrl = 'https://dev-he0x1qipr7tp4tzr.us.auth0.com/.well-known/jwks.json';
 
-export async function handler(event) {
+export const handler = async (event) => {
+  logger.info('Authorizing a user', event.authorizationToken);
   try {
     const jwtToken = await verifyToken(event.authorizationToken);
+    logger.info('User was authorized', jwtToken);
 
     return {
       principalId: jwtToken.sub,
@@ -32,37 +37,24 @@ export async function handler(event) {
         Statement: [
           {
             Action: 'execute-api:Invoke',
-            Effect: 'Deny',
+            Effect: 'allow',
             Resource: '*'
           }
         ]
       }
     };
   }
-}
+};
 
 async function verifyToken(authHeader) {
-  logger.info('verifiedToken', authHeader.substring);
   const token = getToken(authHeader);
-  const decodedJwt = jwt.decode(token, { complete: true }); 
+  const jwt = decode(token, { complete: true });
 
-  const response = await Axios.get(jwksUrl);
-  const keys = response.data.keys;
+  const kid = jwt.header.kid;
+  const res = await Axios.get(jwksUrl);
+  const publicKey = await getSigninKeys(res.data.keys, kid);
 
-  const signingKeys = keys.find(key => key.kid === decodedJwt.header.kid);
-  logger.info('signingKeys', signingKeys);
-
-  if (!signingKeys) {
-    throw new Error('The JWKS endpoint did not contain any keys');
-  }
-
-  const pemData = signingKeys.x5c[0];
-  const cert = `-----BEGIN CERTIFICATE-----\n${pemData}\n-----END CERTIFICATE-----`;
-
-  const verifiedToken = jwt.verify(token, cert, { algorithms: ['RS256'] });
-  logger.info('verifiedToken', verifiedToken);
-
-  return verifiedToken;
+  return verify(token, publicKey, { algorithms: ['RS256'] });
 }
 
 function getToken(authHeader) {
@@ -71,5 +63,43 @@ function getToken(authHeader) {
   if (!authHeader.toLowerCase().startsWith('bearer '))
     throw new Error('Invalid authentication header');
 
-  return authHeader.split(' ')[1];
+  const split = authHeader.split(' ');
+  return split[1];
+}
+
+function certToPEM(cert) {
+  cert = cert.match(/.{1,64}/g).join('\n');
+  return `-----BEGIN CERTIFICATE-----\n${cert}\n-----END CERTIFICATE-----\n`;
+}
+
+async function getSigninKeys(keys, kid) {
+  const signinKeys = keys
+    .filter(
+      (key) =>
+        key.use === 'sig' &&
+        key.kty === 'RSA' &&
+        key.kid &&
+        ((key.x5c && key.x5c.length) || (key.n && key.e))
+    )
+    .map((key) => {
+      return {
+        kid: key.kid,
+        nbf: key.nbf,
+        publicKey: certToPEM(key.x5c[0])
+      };
+    });
+
+  if (!signinKeys || signinKeys.length === 0) {
+    logger.error('The JWKS endpoint did not contain any signing keys');
+    throw new Error('The JWKS endpoint did not contain any signing keys');
+  }
+
+  const signingKey = signinKeys.find((key) => key.kid === kid);
+
+  if (!signingKey) {
+    logger.error(`Unable to find a signing key that matches '${kid}'`);
+    throw new Error(`Unable to find a signing key that matches '${kid}'`);
+  }
+
+  return signingKey.publicKey;
 }

@@ -1,43 +1,35 @@
-import { DynamoDB } from 'aws-sdk';
-import { createLogger } from '../../utils/logger.mjs';
+import 'source-map-support/register';
+import middy from '@middy/core';
+import httpCors from '@middy/http-cors';
 
-const logger = createLogger('getTodos');
-const dynamoDb = new DynamoDB.DocumentClient();
-const TODOS_TABLE = process.env.TODOS_TABLE;
+import { getUserId } from '../utils.js';
+import { createTodo } from '../../helpers/businessLogic/todos.js';
 
-export async function handler(event) {
-  const userId = event.requestContext.authorizer.principalId;
 
-  const params = {
-    TableName: TODOS_TABLE,
-    KeyConditionExpression: 'userId = :userId',
-    ExpressionAttributeValues: {
-      ':userId': userId,
-    }
-  };
-
-  logger.info('Request received to fetch todos for userId', { userId });
-
+export const handler = middy(async (event) => {
   try {
-    const result = await dynamoDb.query(params).promise();
-    
-    logger.info('Fetched Todos successfully', { userId, result });
+    const newTodo = JSON.parse(event.body);
+    const userId = getUserId(event);
+
+    const result = await createTodo(newTodo, userId);
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        items: result.Items
-      })
+        item: result
+      }),
     };
   } catch (error) {
-    logger.error('Error fetching Todos from DynamoDB', { error });
-
+    console.error('Error creating TODO:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'Failed to fetch Todos',
-        error: error.message
-      })
+        error: 'Failed to create TODO'
+      }),
     };
   }
-}
+});
+
+handler.use(httpCors({
+  credentials: true
+}));
