@@ -30,12 +30,12 @@ The `client` folder contains a web application that can use the API that should 
 To use it please edit the `config.ts` file in the `client` folder:
 
 ```ts
-const apiId = '...' API Gateway id
+const apiId = '3uowyd25ne' API Gateway id
 export const apiEndpoint = `https://${apiId}.execute-api.us-east-1.amazonaws.com/dev`
 
 export const authConfig = {
-  domain: '...',    // Domain from Auth0
-  clientId: '...',  // Client id from an Auth0 application
+  domain: 'dev-he0x1qipr7tp4tzr.us.auth0.com',    // Domain from Auth0
+  clientId: '5SAQ4jmZjGvaFlBv3fowet4nY9hzS2ib,  // Client id from an Auth0 application
   callbackUrl: 'http://localhost:3000/callback'
 }
 ```
