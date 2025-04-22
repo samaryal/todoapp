@@ -30,7 +30,7 @@ The `client` folder contains a web application that can use the API that should 
 To use it please edit the `config.ts` file in the `client` folder:
 
 ```ts
-const apiId = '3uowyd25ne' API Gateway id
+const apiId = 'bnor5s5pz7' API Gateway id
 export const apiEndpoint = `https://${apiId}.execute-api.us-east-1.amazonaws.com/dev`
 
 export const authConfig = {

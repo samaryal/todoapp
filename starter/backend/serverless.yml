@@ -1,4 +1,4 @@
-service: serverless-todo-app
+service: todo-app-sam-dev
 
 plugins:
   - serverless-iam-roles-per-function
@@ -9,19 +9,44 @@ frameworkVersion: '4'
 provider:
   name: aws
   runtime: nodejs18.x
-  stage: dev
-  region: us-east-1
   tracing:
     lambda: true
     apiGateway: true
-  logs:
-    restApi: true
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}  
   environment:
-    TODOS_TABLE: todos-dev
-    TODOS_CREATED_AT_INDEX: CreatedAtIndex
-    ATTACHMENTS_BUCKET: todo-samar-1
+    TODOS_TABLE: todos-dev-1
+    TODOS_BY_USER_INDEX: TodoIdIndex
+    ATTACHMENTS_BUCKET: todo-samar-6
+    SIGNED_URL_EXPIRATION: 300
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+          Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}/index/${self:provider.environment.TODOS_BY_USER_INDEX}
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource: arn:aws:s3:::${self:provider.environment.ATTACHMENTS_BUCKET}/*
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource:
+            - "*"
 
 functions:
+
   Auth:
     handler: src/lambda/auth/auth0Authorizer.handler
 
@@ -31,15 +56,24 @@ functions:
       - http:
           method: get
           path: todos
-          cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
+            type: TOKEN
+            identitySource: method.request.header.Authorization
+          cors:
+            origin: 'http://localhost:3000'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
     iamRoleStatements:
       - Effect: Allow
         Action:
           - dynamodb:Query
-        Resource:
-          - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
-          - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}/index/${self:provider.environment.TODOS_CREATED_AT_INDEX}
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
 
   CreateTodo:
     handler: src/lambda/http/createTodo.handler
@@ -47,13 +81,22 @@ functions:
       - http:
           method: post
           path: todos
-          cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
+            type: TOKEN
+            identitySource: method.request.header.Authorization
     iamRoleStatements:
       - Effect: Allow
         Action:
           - dynamodb:PutItem
+          - dynamodb:GetItem
         Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+        Resource:
+          - "*"
 
   UpdateTodo:
     handler: src/lambda/http/updateTodo.handler
@@ -61,13 +104,30 @@ functions:
       - http:
           method: patch
           path: todos/{todoId}
-          cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
+            type: TOKEN
+            identitySource: method.request.header.Authorization
+          cors:
+            origin: 'http://localhost:3000'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
     iamRoleStatements:
       - Effect: Allow
         Action:
           - dynamodb:UpdateItem
         Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+        Resource:
+          - "*"
 
   DeleteTodo:
     handler: src/lambda/http/deleteTodo.handler
@@ -75,13 +135,30 @@ functions:
       - http:
           method: delete
           path: todos/{todoId}
-          cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
+            type: TOKEN
+            identitySource: method.request.header.Authorization
+          cors:
+            origin: 'http://localhost:3000'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
     iamRoleStatements:
       - Effect: Allow
         Action:
           - dynamodb:DeleteItem
         Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+        Resource:
+          - "*"
 
   GenerateUploadUrl:
     handler: src/lambda/http/generateUploadUrl.handler
@@ -89,30 +166,66 @@ functions:
       - http:
           method: post
           path: todos/{todoId}/attachment
-          cors: true
-          authorizer: Auth
+          authorizer:
+            name: Auth
+            type: TOKEN
+            identitySource: method.request.header.Authorization
+          cors:
+            origin: 'http://localhost:3000'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: true
     iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+        Resource:
+          - "*"
       - Effect: Allow
         Action:
           - s3:PutObject
         Resource: arn:aws:s3:::${self:provider.environment.ATTACHMENTS_BUCKET}/*
-      - Effect: Allow
-        Action:
-          - dynamodb:UpdateItem
-          - dynamodb:GetItem
-        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
 
 resources:
   Resources:
-    TodosTable:
-      Type: AWS::DynamoDB::Table
+    GatewayResponseDefault4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'http://localhost:3000'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST,PATCH,DELETE'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+
+    GatewayResponseDefault5XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'http://localhost:3000'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST,PATCH,DELETE'"
+        ResponseType: DEFAULT_5XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+
+    TodosDynamoDBTable:
+      Type: "AWS::DynamoDB::Table"
       Properties:
         AttributeDefinitions:
-          - AttributeName: userId
-            AttributeType: S
           - AttributeName: todoId
             AttributeType: S
-          - AttributeName: createdAt
+          - AttributeName: userId
             AttributeType: S
         KeySchema:
           - AttributeName: userId
@@ -120,58 +233,13 @@ resources:
           - AttributeName: todoId
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
         TableName: ${self:provider.environment.TODOS_TABLE}
-        LocalSecondaryIndexes:
-          - IndexName: ${self:provider.environment.TODOS_CREATED_AT_INDEX}
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.TODOS_BY_USER_INDEX}
             KeySchema:
-              - AttributeName: userId
+              - AttributeName: todoId
                 KeyType: HASH
-              - AttributeName: createdAt
-                KeyType: RANGE
             Projection:
-              ProjectionType: ALL
-
-    AttachmentsBucket:
-      Type: AWS::S3::Bucket
-      Properties:
-        BucketName: ${self:provider.environment.ATTACHMENTS_BUCKET}
-        CorsConfiguration:
-          CorsRules:
-            - AllowedHeaders:
-                - "*"
-              AllowedMethods:
-                - GET
-                - PUT
-                - POST
-                - DELETE
-                - HEAD
-              AllowedOrigins:
-                - "*"
-        PublicAccessBlockConfiguration:
-          BlockPublicAcls: false
-          BlockPublicPolicy: false
-          IgnorePublicAcls: false
-          RestrictPublicBuckets: false
-
-    BucketPolicy:
-      Type: AWS::S3::BucketPolicy
-      Properties:
-        Bucket: !Ref AttachmentsBucket
-        PolicyDocument:
-          Statement:
-            - Sid: PublicReadGetObject
-              Effect: Allow
-              Principal: "*"
-              Action: "s3:GetObject"
-              Resource: arn:aws:s3:::${self:provider.environment.ATTACHMENTS_BUCKET}/*
-
-    GatewayResponseDefault4XX:
-      Type: AWS::ApiGateway::GatewayResponse
-      Properties:
-        ResponseParameters:
-          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST,PUT,DELETE,PATCH'"
-        ResponseType: DEFAULT_4XX
-        RestApiId:
-          Ref: ApiGatewayRestApi
+              ProjectionType: ALL  

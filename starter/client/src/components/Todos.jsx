@@ -136,7 +136,7 @@ export function Todos() {
         setTodos(todos)
         setLoadingTodos(false)
       } catch (e) {
-        alert(`Failed to fetch todos: ${e.message}`)
+        alert(`Failed to fetch todos oj: ${e.message}`)
       }
     }
     foo()

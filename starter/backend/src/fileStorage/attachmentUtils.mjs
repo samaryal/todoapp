@@ -1,16 +1,36 @@
-import AWS from 'aws-sdk';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-const s3 = new AWS.S3();
-const BUCKET_NAME = 'todo-samar';
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION
+});
 
-export function createAttachmentPresignedUrl(todoId) {
-  const s3Params = {
-    Bucket: BUCKET_NAME,
-    Key: todoId,
-    Expires: 300, 
-    ContentType: 'image/png', 
-  };
+const bucketName = process.env.ATTACHMENTS_BUCKET;
+const signedUrlExpireSeconds = 60 * 5;
 
-  const uploadUrl = s3.getSignedUrl('putObject', s3Params);
-  return uploadUrl;
-}
+const getPutSignedUrl = async (key) => {
+  const command = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: key
+  });
+
+  try {
+    const presignedUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: signedUrlExpireSeconds
+    });
+    return presignedUrl;
+  } catch (error) {
+    throw new Error('Could not generate presigned URL');
+  }
+};
+
+const generateImageUrl = async (imageId) => {
+  const presignedUrl = await getPutSignedUrl(imageId);
+  const imageUrl = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${imageId}`;
+  return { presignedUrl, imageUrl };
+};
+
+export {
+  getPutSignedUrl,
+  generateImageUrl
+};

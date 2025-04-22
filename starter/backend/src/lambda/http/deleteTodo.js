@@ -23,6 +23,12 @@ export async function handler(event) {
 
     return {
       statusCode: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': true,
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
+        'Access-Control-Allow-Headers': 'Origin, Content-Type, Accept, Authorization, X-Request-With'
+      },
       body: ''
     };
   } catch (error) {
@@ -30,6 +36,12 @@ export async function handler(event) {
 
     return {
       statusCode: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': true,
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
+        'Access-Control-Allow-Headers': 'Origin, Content-Type, Accept, Authorization, X-Request-With'
+      },
       body: JSON.stringify({
         message: 'Failed to delete TODO item',
         error: error.message

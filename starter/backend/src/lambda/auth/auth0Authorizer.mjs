@@ -1,15 +1,16 @@
-import 'source-map-support/register';
-
+require('source-map-support').install();
 import { verify, decode } from 'jsonwebtoken';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../utils/logger.mjs';
 import Axios from 'axios';
 
 const logger = createLogger('auth');
 
+// رابط مفاتيح Auth0
 const jwksUrl = 'https://dev-he0x1qipr7tp4tzr.us.auth0.com/.well-known/jwks.json';
 
 export const handler = async (event) => {
   logger.info('Authorizing a user', event.authorizationToken);
+
   try {
     const jwtToken = await verifyToken(event.authorizationToken);
     logger.info('User was authorized', jwtToken);
@@ -37,7 +38,7 @@ export const handler = async (event) => {
         Statement: [
           {
             Action: 'execute-api:Invoke',
-            Effect: 'allow',
+            Effect: 'Deny',
             Resource: '*'
           }
         ]
@@ -48,13 +49,15 @@ export const handler = async (event) => {
 
 async function verifyToken(authHeader) {
   const token = getToken(authHeader);
+
   const jwt = decode(token, { complete: true });
+  if (!jwt) throw new Error('Invalid token');
 
   const kid = jwt.header.kid;
   const res = await Axios.get(jwksUrl);
-  const publicKey = await getSigninKeys(res.data.keys, kid);
+  const signingKey = getSigningKey(res.data.keys, kid);
 
-  return verify(token, publicKey, { algorithms: ['RS256'] });
+  return verify(token, signingKey, { algorithms: ['RS256'] });
 }
 
 function getToken(authHeader) {
@@ -63,43 +66,14 @@ function getToken(authHeader) {
   if (!authHeader.toLowerCase().startsWith('bearer '))
     throw new Error('Invalid authentication header');
 
-  const split = authHeader.split(' ');
-  return split[1];
+  return authHeader.split(' ')[1];
 }
 
-function certToPEM(cert) {
-  cert = cert.match(/.{1,64}/g).join('\n');
-  return `-----BEGIN CERTIFICATE-----\n${cert}\n-----END CERTIFICATE-----\n`;
-}
+function getSigningKey(keys, kid) {
+  const key = keys.find(k => k.kid === kid);
+  if (!key) throw new Error('Signing key not found');
 
-async function getSigninKeys(keys, kid) {
-  const signinKeys = keys
-    .filter(
-      (key) =>
-        key.use === 'sig' &&
-        key.kty === 'RSA' &&
-        key.kid &&
-        ((key.x5c && key.x5c.length) || (key.n && key.e))
-    )
-    .map((key) => {
-      return {
-        kid: key.kid,
-        nbf: key.nbf,
-        publicKey: certToPEM(key.x5c[0])
-      };
-    });
-
-  if (!signinKeys || signinKeys.length === 0) {
-    logger.error('The JWKS endpoint did not contain any signing keys');
-    throw new Error('The JWKS endpoint did not contain any signing keys');
-  }
-
-  const signingKey = signinKeys.find((key) => key.kid === kid);
-
-  if (!signingKey) {
-    logger.error(`Unable to find a signing key that matches '${kid}'`);
-    throw new Error(`Unable to find a signing key that matches '${kid}'`);
-  }
-
-  return signingKey.publicKey;
+  const cert = key.x5c[0];
+  const pem = `-----BEGIN CERTIFICATE-----\n${cert.match(/.{1,64}/g).join('\n')}\n-----END CERTIFICATE-----\n`;
+  return pem;
 }

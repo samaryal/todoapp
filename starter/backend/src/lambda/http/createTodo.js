@@ -1,28 +1,27 @@
-import { createTodo } from '../../businessLogic/todos.mjs'
+import middy from '@middy/core';
+import cors from '@middy/http-cors';
+import httpErrorHandler from '@middy/http-error-handler';
+import { getUserId } from '../auth/utils.mjs';
+import { createTodoAction } from '../../businessLogic/todos.js';
 
-export async function handler(event) {
-  const newTodo = JSON.parse(event.body)
-
+const createTodoHandler = async (event) => {
   try {
-    const createdTodo = await createTodo(newTodo)
+    const userId = getUserId(event);
+    const newTodo = JSON.parse(event.body);
+    const todo = await createTodoAction(userId, newTodo);
 
     return {
       statusCode: 201,
-      body: JSON.stringify({
-        item: createdTodo
-      }),
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Credentials': true
-      }
-    }
+      body: JSON.stringify({ item: todo }),
+    };
   } catch (error) {
-    console.error('Error creating TODO item:', error)
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: 'Could not create the TODO item'
-      })
-    }
+      body: JSON.stringify({ message: 'Error creating the todo item.' }),
+    };
   }
-}
+};
+
+export const handler = middy(createTodoHandler)
+  .use(httpErrorHandler())
+  .use(cors({ credentials: true }));

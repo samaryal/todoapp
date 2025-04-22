@@ -1,35 +1,26 @@
-import 'source-map-support/register';
 import middy from '@middy/core';
-import httpCors from '@middy/http-cors';
+import cors from '@middy/http-cors';
+import httpErrorHandler from '@middy/http-error-handler';
+import { getTodosAction } from '../../businessLogic/todos.js';
+import { getUserId } from '../auth/utils.mjs';
 
-import { getUserId } from '../utils.js';
-import { createTodo } from '../../helpers/businessLogic/todos.js';
-
-
-export const handler = middy(async (event) => {
+const getTodosHandler = async (event) => {
   try {
-    const newTodo = JSON.parse(event.body);
     const userId = getUserId(event);
-
-    const result = await createTodo(newTodo, userId);
+    const items = await getTodosAction(userId);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        item: result
-      }),
+      body: JSON.stringify({ items }),
     };
   } catch (error) {
-    console.error('Error creating TODO:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: 'Failed to create TODO'
-      }),
+      body: JSON.stringify({ message: 'Error retrieving todos.' }),
     };
   }
-});
+};
 
-handler.use(httpCors({
-  credentials: true
-}));
+export const handler = middy(getTodosHandler)
+  .use(httpErrorHandler())
+  .use(cors({ credentials: true }));

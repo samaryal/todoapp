@@ -1,10 +1,10 @@
-import { S3 } from 'aws-sdk';
+const { S3 } = require('aws-sdk');
 import { createLogger } from '../../utils/logger.mjs';
 
 const logger = createLogger('generateUploadUrl');
 
 const s3 = new S3();
-const BUCKET_NAME = process.env.ATTACHMENTS_S3_BUCKET;
+const BUCKET_NAME = process.env.ATTACHMENTS_BUCKET;
 
 export async function handler(event) {
   const todoId = event.pathParameters.todoId;
@@ -13,10 +13,20 @@ export async function handler(event) {
   const filePath = `attachments/${fileName}`;
 
   const params = {
-    Bucket: BUCKET_NAME,
+    Bucket: 'todo-samar-1',  // اسم الباكت
     Key: filePath,
     Expires: 300,
-    ContentType: 'image/jpeg'
+    ContentType: 'image/jpeg',
+    // إعدادات CORS
+    CORSConfiguration: {
+      CORSRules: [
+        {
+          AllowedOrigins: ['*'],  // السماح لجميع النطاقات
+          AllowedMethods: ['GET', 'PUT', 'POST', 'DELETE'],  // السماح بطرق HTTP معينة
+          AllowedHeaders: ['Content-Type', 'Authorization']  // السماح برؤوس معينة
+        }
+      ]
+    }
   };
 
   try {
@@ -36,7 +46,7 @@ export async function handler(event) {
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'Failed to generate presigned URL',
+        message: 'Failed to g generate presigned URL',
         error: error.message
       })
     };
