@@ -85,6 +85,9 @@ functions:
             name: Auth
             type: TOKEN
             identitySource: method.request.header.Authorization
+          request:
+            schemas:
+              application/json: ${file(Schema/createTodoSchema.json)}  
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -108,6 +111,9 @@ functions:
             name: Auth
             type: TOKEN
             identitySource: method.request.header.Authorization
+          request:
+            schemas:
+              application/json: ${file(Schema/updateTodoSchema.json)}   
           cors:
             origin: 'http://localhost:3000'
             headers:
