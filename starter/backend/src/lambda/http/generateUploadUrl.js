@@ -1,54 +1,37 @@
-const { S3 } = require('aws-sdk');
-import { createLogger } from '../../utils/logger.mjs';
+import middy from '@middy/core';
+import cors from '@middy/http-cors';
+import httpErrorHandler from '@middy/http-error-handler';
+import { getUserId } from '../auth/utils.mjs';
+import { generateImageUrlAction } from '../../businessLogic/todos.js';
 
-const logger = createLogger('generateUploadUrl');
-
-const s3 = new S3();
-const BUCKET_NAME = process.env.ATTACHMENTS_BUCKET;
-
-export async function handler(event) {
-  const todoId = event.pathParameters.todoId;
-
-  const fileName = `${todoId}.jpg`;
-  const filePath = `attachments/${fileName}`;
-
-  const params = {
-    Bucket: 'todo-samar-1',  // اسم الباكت
-    Key: filePath,
-    Expires: 300,
-    ContentType: 'image/jpeg',
-    // إعدادات CORS
-    CORSConfiguration: {
-      CORSRules: [
-        {
-          AllowedOrigins: ['*'],  // السماح لجميع النطاقات
-          AllowedMethods: ['GET', 'PUT', 'POST', 'DELETE'],  // السماح بطرق HTTP معينة
-          AllowedHeaders: ['Content-Type', 'Authorization']  // السماح برؤوس معينة
-        }
-      ]
-    }
-  };
-
+const generateImageUrlHandler = async (event) => {
   try {
-    const uploadUrl = await s3.getSignedUrlPromise('putObject', params);
+    const userId = getUserId(event);
+    const { todoId } = event.pathParameters;
 
-    logger.info('Generated presigned URL', { todoId, uploadUrl });
+    const uploadUrl = await generateImageUrlAction(userId, todoId);
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        uploadUrl
-      })
+        uploadUrl,
+      }),
     };
   } catch (error) {
-    logger.error('Error generating presigned URL', { error });
-
+    console.error('Failed to generate image upload URL:', error.message);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'Failed to g generate presigned URL',
-        error: error.message
-      })
+        message: 'Failed to generate image upload URL. Please try again later.',
+      }),
     };
   }
-}
+};
+
+export const handler = middy(generateImageUrlHandler)
+  .use(httpErrorHandler())
+  .use(
+    cors({
+      credentials: true,
+    })
+  );

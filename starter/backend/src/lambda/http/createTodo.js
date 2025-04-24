@@ -1,7 +1,7 @@
 import middy from '@middy/core';
 import cors from '@middy/http-cors';
 import httpErrorHandler from '@middy/http-error-handler';
-import { getUserId } from '../auth/utils.mjs';
+import { getUserId } from '../utils.mjs';
 import { createTodoAction } from '../../businessLogic/todos.js';
 
 const createTodoHandler = async (event) => {

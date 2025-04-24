@@ -1,79 +1,94 @@
-require('source-map-support').install();
-import { verify, decode } from 'jsonwebtoken';
-import { createLogger } from '../../utils/logger.mjs';
-import Axios from 'axios';
+import Axios from 'axios'
+import jsonwebtoken from 'jsonwebtoken'
+import jwksClient from 'jwks-rsa'
+import { createLogger } from '../../utils/logger.mjs'
 
-const logger = createLogger('auth');
+const logger = createLogger('auth')
 
-// رابط مفاتيح Auth0
-const jwksUrl = 'https://dev-he0x1qipr7tp4tzr.us.auth0.com/.well-known/jwks.json';
+const client = jwksClient({
+  jwksUri: 'https://dev-he0x1qipr7tp4tzr.us.auth0.com/.well-known/jwks.json'
+})
 
-export const handler = async (event) => {
-  logger.info('Authorizing a user', event.authorizationToken);
-
+export async function handler(event) {
   try {
-    const jwtToken = await verifyToken(event.authorizationToken);
-    logger.info('User was authorized', jwtToken);
-
-    return {
-      principalId: jwtToken.sub,
-      policyDocument: {
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'execute-api:Invoke',
-            Effect: 'Allow',
-            Resource: '*'
-          }
-        ]
-      }
-    };
+    const jwtToken = await verifyToken(event.authorizationToken)
+    logger.info('JWT Token:', jwtToken)
+    logger.info('Authorization Token:', event.authorizationToken)   
+    return generatePolicy(jwtToken.sub, 'Allow')
   } catch (e) {
-    logger.error('User not authorized', { error: e.message });
-
-    return {
-      principalId: 'user',
-      policyDocument: {
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'execute-api:Invoke',
-            Effect: 'Deny',
-            Resource: '*'
-          }
-        ]
-      }
-    };
+    logger.error('Authorization failed:', e.message)
+    return generatePolicy('user', 'Deny')
   }
-};
+}
+
+function generatePolicy(principalId, effect) {
+  return {
+    principalId,
+    policyDocument: {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Action: 'execute-api:Invoke',
+          Effect: effect,
+          Resource: '*'
+        }
+      ]
+    }
+  }
+}
 
 async function verifyToken(authHeader) {
-  const token = getToken(authHeader);
+  const token = extractToken(authHeader)
+  
+  if (!token) {
+    throw new Error('Authentication token is missing')
+  }
 
-  const jwt = decode(token, { complete: true });
-  if (!jwt) throw new Error('Invalid token');
+  const decodedHeader = jsonwebtoken.decode(token, { complete: true })?.header
+  if (!decodedHeader?.kid) {
+    throw new Error('Token does not contain a valid kid')
+  }
 
-  const kid = jwt.header.kid;
-  const res = await Axios.get(jwksUrl);
-  const signingKey = getSigningKey(res.data.keys, kid);
+  const signingKey = await getSigningKey(decodedHeader.kid)
+  if (!signingKey) {
+    throw new Error('Failed to retrieve signing key')
+  }
 
-  return verify(token, signingKey, { algorithms: ['RS256'] });
+  const decodedJwt = await new Promise((resolve, reject) => {
+    jsonwebtoken.verify(token, signingKey, { algorithms: ['RS256'] }, (error, decoded) => {
+      if (error) {
+        reject(new Error('Token verification failed'))
+      } else {
+        resolve(decoded)
+      }
+    })
+  })
+
+  return decodedJwt
 }
 
-function getToken(authHeader) {
-  if (!authHeader) throw new Error('No authentication header');
+function extractToken(authHeader) {
+  if (!authHeader) {
+    throw new Error('Authorization header is missing')
+  }
 
-  if (!authHeader.toLowerCase().startsWith('bearer '))
-    throw new Error('Invalid authentication header');
+  const parts = authHeader.split(' ')
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+    throw new Error('Invalid token format')
+  }
 
-  return authHeader.split(' ')[1];
+  return parts[1]
 }
 
-function getSigningKey(keys, kid) {
-  const key = keys.find(k => k.kid === kid);
-  if (!key) throw new Error('Signing key not found');
-
-  const cert = key.x5c[0];
-  const pem = `-----BEGIN CERTIFICATE-----\n${cert.match(/.{1,64}/g).join('\n')}\n-----END CERTIFICATE-----\n`;
-  return pem;
+async function getSigningKey(kid) {
+  return new Promise((resolve, reject) => {
+    client.getSigningKey(kid, (err, key) => {
+      if (err) {
+        logger.error('Error fetching signing key:', err.message)
+        reject(err)
+      } else {
+        resolve(key.publicKey || key.rsaPublicKey)
+      }
+    })
+  })
 }

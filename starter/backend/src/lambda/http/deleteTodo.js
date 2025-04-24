@@ -1,51 +1,38 @@
-import { DynamoDB } from 'aws-sdk';
-import { createLogger } from '../../utils/logger.mjs';
+import middy from '@middy/core';
+import cors from '@middy/http-cors';
+import httpErrorHandler from '@middy/http-error-handler';
+import { getUserId } from '../auth/utils.mjs';
+import { deleteTodoAction } from '../../businessLogic/todos.js';
 
-const logger = createLogger('deleteTodo');
-
-const dynamoDb = new DynamoDB.DocumentClient();
-const TODOS_TABLE = process.env.TODOS_TABLE;
-
-export async function handler(event) {
-  const todoId = event.pathParameters.todoId;
-
-  const params = {
-    TableName: TODOS_TABLE,
-    Key: {
-      todoId
-    }
-  };
-
+const deleteTodoHandler = async (event) => {
   try {
-    await dynamoDb.delete(params).promise();
 
-    logger.info('Successfully deleted TODO item', { todoId });
+    const userId = getUserId(event);
+
+    const { todoId } = event.pathParameters;
+
+    await deleteTodoAction(userId, todoId);
 
     return {
-      statusCode: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Credentials': true,
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
-        'Access-Control-Allow-Headers': 'Origin, Content-Type, Accept, Authorization, X-Request-With'
-      },
-      body: ''
+      statusCode: 204, 
+      body: JSON.stringify({}),
     };
   } catch (error) {
-    logger.error('Error deleting TODO item', { error });
-
+    
+    console.error('Error deleting todo:', error);
     return {
-      statusCode: 500,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Credentials': true,
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
-        'Access-Control-Allow-Headers': 'Origin, Content-Type, Accept, Authorization, X-Request-With'
-      },
+      statusCode: 500, 
       body: JSON.stringify({
-        message: 'Failed to delete TODO item',
-        error: error.message
-      })
+        message: 'internal Server Error.',
+      }),
     };
   }
-}
+};
+
+export const handler = middy(deleteTodoHandler)
+  .use(httpErrorHandler()) 
+  .use(
+    cors({
+      credentials: true, 
+    })
+  );

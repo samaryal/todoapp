@@ -78,6 +78,7 @@ export function Todos() {
     try {
       const accessToken = await getAccessTokenSilently({
         audience: `https://dev-he0x1qipr7tp4tzr.us.auth0.com/api/v2/`,
+        ignoreCache: true,
         scope: 'delete:todo'
       })
       await deleteTodo(accessToken, todoId)
@@ -92,6 +93,7 @@ export function Todos() {
       const todo = todos[pos]
       const accessToken = await getAccessTokenSilently({
         audience: `https://dev-he0x1qipr7tp4tzr.us.auth0.com/api/v2/`,
+        ignoreCache: true,
         scope: 'write:todo'
       })
       await patchTodo(accessToken, todo.todoId, {
@@ -129,6 +131,7 @@ export function Todos() {
       try {
         const accessToken = await getAccessTokenSilently({
           audience: `https://dev-he0x1qipr7tp4tzr.us.auth0.com/api/v2/`,
+          ignoreCache: true,
           scope: 'read:todos'
         })
         console.log('Access token: ' + accessToken)

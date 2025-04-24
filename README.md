@@ -172,26 +172,4 @@ curl --location --request DELETE 'https://{API-ID}.execute-api.us-east-1.amazona
 ```
 
 
-## Upload image attachment
-
-To upload an image attachment you would first need to send a POST request to the following URL:
-
-```sh
-curl --location --request POST 'https://{API-ID}.execute-api.us-east-1.amazonaws.com/dev/todos/{TODO-ID}/attachment' \
---header 'Authorization: Bearer {JWT-token}'
-```
-
-It should return a response like this that would provide a pre-signed URL:
-
-```json
-{
-    "uploadUrl": "https://serverless-c4-todo-images.s3.us-east-1.amazonaws.com/...&x-id=PutObject"
-}
-```
-
-We can then use curl command to upload an image (`image.jpg` in this example) to S3 using this pre-signed URL:
-
-```sh
-curl -X PUT -T image.jpg -L "https://serverless-c4-todo-images.s3.us-east-1.amazonaws.com/...&x-id=PutObject"
-```
 
